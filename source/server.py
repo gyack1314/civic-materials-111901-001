@@ -44,10 +44,12 @@ class Source:
         if path=='/policies':
             return 200,{}, {'groups':{'shared-city':{'origins':['127.0.0.1','localhost'],'maximum':2,'window_seconds':10},'files':{'origins':['127.0.0.2'],'maximum':1,'window_seconds':5}},'clock':self.clock}
         if path=='/robots.txt':
-            return 200,{'Content-Type':'text/plain'},'User-agent: *\nDisallow: '+('/closed/' if self.phase<1 else '/files/')+'\n'
-        prior=[x for x in self.log[:-1] if x['path'].startswith(('/topics/','/files/','/redirect/')) and x['headers'].get('host','').split(':')[0] in ('127.0.0.1','localhost') and x['time']>self.clock-10]
-        if group=='shared-city' and len(prior)>=2:
-            return 429,{'Retry-After':str(max(1,10-(self.clock-prior[0]['time'])))},{'error':'站点组冷却'}
+            return 200,{'Content-Type':'text/plain'},'User-agent: *\nDisallow: '+('/files/' if self.phase>=1 and group=='shared-city' else '/closed/')+'\n'
+        members=('127.0.0.1','localhost') if group=='shared-city' else (host,)
+        window,maximum=(10,2) if group=='shared-city' else (5,1)
+        prior=[x for x in self.log[:-1] if x['path'].startswith(('/topics/','/files/','/redirect/')) and x['headers'].get('host','').split(':')[0] in members and x['time']>self.clock-window]
+        if len(prior)>=maximum:
+            return 429,{'Retry-After':str(max(1,window-(self.clock-prior[0]['time'])))},{'error':'站点组冷却'}
         if path.startswith('/topics/'):
             t=path.rsplit('/',1)[-1]
             return 200,{},f'<main><h1>专题 {html.escape(t)}</h1><a rel="document" href="/files/shared">共同原件</a><a rel="document" href="/redirect/{html.escape(t)}">专题原件</a></main>'
